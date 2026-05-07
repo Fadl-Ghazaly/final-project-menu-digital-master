@@ -78,30 +78,48 @@
             
             <!-- SCREEN: HOME (Menu List) -->
             <div x-show="screen === 'home'" class="animate-in fade-in slide-in-from-right duration-300">
+                @if(count($promos) > 0)
                 <!-- Promo Banner Carousel -->
                 <section class="mt-6 px-4">
                     <div class="relative group" x-data="{ active: 0, timer: null }" x-init="timer = setInterval(() => active = (active + 1) % {{ count($promos) }}, 5000)">
-                        <div class="flex overflow-hidden rounded-3xl h-44 shadow-xl">
+                        <div class="flex overflow-hidden rounded-3xl h-44 shadow-xl bg-slate-100">
                             @foreach($promos as $index => $promo)
-                            <div x-show="active === {{ $index }}" class="w-full h-full flex-shrink-0 relative promo-gradient p-6 text-white overflow-hidden">
+                            @php
+                                $gradient = 'linear-gradient(135deg, #FF8C00 0%, #E8781A 100%)';
+                                if($promo->promo_type == 'bundeling') $gradient = 'linear-gradient(135deg, #1D9E75 0%, #166534 100%)';
+                                if($promo->promo_type == 'free_item') $gradient = 'linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)';
+                            @endphp
+                            <div x-show="active === {{ $index }}" class="w-full h-full flex-shrink-0 relative p-6 text-white overflow-hidden transition-all duration-500"
+                                 style="background: {{ $gradient }}">
                                 <div class="relative z-10 w-2/3">
-                                    <span class="text-[10px] font-black uppercase tracking-[0.2em] mb-2 block opacity-80">Special Offer</span>
-                                    <h3 class="text-xl font-black leading-tight mb-2">{{ $promo['title'] }}</h3>
-                                    <p class="text-[10px] font-medium opacity-90 line-clamp-2">{{ $promo['description'] }}</p>
+                                    <span class="text-[10px] font-black uppercase tracking-[0.2em] mb-2 block opacity-80">{{ str_replace('_', ' ', $promo->promo_type) }}</span>
+                                    <h3 class="text-xl font-black leading-tight mb-2">{{ $promo->name }}</h3>
+                                    <p class="text-[10px] font-medium opacity-90 line-clamp-2">{{ $promo->description }}</p>
                                 </div>
-                                <img src="{{ $promo['image'] }}" class="absolute right-0 bottom-0 w-32 h-32 object-cover rounded-tl-[3rem] opacity-40 mix-blend-overlay rotate-12 translate-x-4 translate-y-4">
+                                @if($promo->image)
+                                <img src="{{ asset('storage/promos/' . $promo->image) }}" class="absolute right-0 bottom-0 w-32 h-32 object-cover rounded-tl-[3rem] opacity-40 mix-blend-overlay rotate-12 translate-x-4 translate-y-4">
+                                @else
+                                <div class="absolute right-0 bottom-0 w-32 h-32 bg-white/20 rounded-tl-[3rem] flex items-center justify-center rotate-12 translate-x-4 translate-y-4">
+                                    <i data-lucide="tag" class="w-16 h-16 opacity-30"></i>
+                                </div>
+                                @endif
                             </div>
                             @endforeach
                         </div>
+                        
+                        @if(count($promos) > 1)
                         <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
                             @foreach($promos as $index => $promo)
                             <div class="h-1.5 rounded-full transition-all duration-300" :class="active === {{ $index }} ? 'w-6 bg-white' : 'w-1.5 bg-white/40'"></div>
                             @endforeach
                         </div>
+                        @endif
                     </div>
                 </section>
+                @endif
 
                 <!-- Popular Menu -->
+                @if($products->where('is_popular', true)->count() > 0)
                 <section class="mt-8">
                     <div class="px-6 flex items-center justify-between mb-4">
                         <h3 class="font-black text-slate-900">Menu Populer</h3>
@@ -123,20 +141,54 @@
                         @endforeach
                     </div>
                 </section>
+                @endif
 
-                <!-- Categories -->
-                <section class="mt-6 overflow-x-auto no-scrollbar flex gap-2 px-6 pb-2">
-                    <button class="px-6 py-2.5 bg-brand text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-brand/20 shrink-0">Semua</button>
-                    @foreach($categories as $category)
-                    <button class="px-6 py-2.5 bg-white border border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-400 shrink-0 hover:border-brand/30 transition">{{ $category->name }}</button>
-                    @endforeach
+                <!-- Category & Cuisine Filters -->
+                <section class="mt-6 space-y-4">
+                    <!-- Categories -->
+                    <div class="overflow-x-auto no-scrollbar flex gap-2 px-6">
+                        <button @click="activeCategory = 'all'" 
+                                :class="activeCategory === 'all' ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'bg-white border-slate-100 text-slate-400'"
+                                class="px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shrink-0 transition">Semua Kategori</button>
+                        @foreach($categories as $category)
+                        <button @click="activeCategory = {{ $category->id }}" 
+                                :class="activeCategory === {{ $category->id }} ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'bg-white border-slate-100 text-slate-400'"
+                                class="px-6 py-2.5 border rounded-2xl text-[10px] font-black uppercase tracking-widest shrink-0 hover:border-brand/30 transition">{{ $category->name }}</button>
+                        @endforeach
+                    </div>
+
+                    <!-- Cuisines (Regions) -->
+                    <div class="overflow-x-auto no-scrollbar flex gap-2 px-6">
+                        <button @click="activeCuisine = 'all'" 
+                                :class="activeCuisine === 'all' ? 'bg-slate-900 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400'"
+                                class="px-5 py-2 rounded-xl font-black text-[9px] uppercase tracking-widest shrink-0 transition">Semua Daerah</button>
+                        <template x-for="c in cuisines" :key="c">
+                            <button @click="activeCuisine = c" 
+                                    :class="activeCuisine === c ? 'bg-slate-900 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400'"
+                                    class="px-5 py-2 border rounded-xl text-[9px] font-black uppercase tracking-widest shrink-0 transition" x-text="c"></button>
+                        </template>
+                    </div>
+
+                    <!-- Tags Rasa -->
+                    <div class="overflow-x-auto no-scrollbar flex gap-2 px-6">
+                        <button @click="activeTag = 'all'" 
+                                :class="activeTag === 'all' ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'bg-white border-slate-100 text-slate-400'"
+                                class="px-5 py-2 rounded-xl font-black text-[9px] uppercase tracking-widest shrink-0 transition">Semua Rasa</button>
+                        <template x-for="tag in availableTags" :key="tag">
+                            <button @click="activeTag = tag" 
+                                    :class="activeTag === tag ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'bg-white border-slate-100 text-slate-400'"
+                                    class="px-5 py-2 border rounded-xl text-[9px] font-black uppercase tracking-widest shrink-0 transition" x-text="tag"></button>
+                        </template>
+                    </div>
                 </section>
 
                 <!-- Product Grid -->
                 <section class="mt-8 px-6 pb-12">
                     <div class="grid grid-cols-2 gap-4">
                         @foreach($products as $product)
-                        <div @click="openProduct({{ json_encode($product) }})" class="bg-white p-3 rounded-4xl border border-slate-100 shadow-sm relative group overflow-hidden transition active:scale-95">
+                        <div x-show="(activeCategory === 'all' || activeCategory === {{ $product->category_id }}) && (activeCuisine === 'all' || activeCuisine === '{{ $product->cuisine }}') && (activeTag === 'all' || ({{ json_encode($product->tags) }} && {{ json_encode($product->tags) }}.includes(activeTag)))" 
+                             @click="openProduct({{ json_encode($product) }})" 
+                             class="bg-white p-3 rounded-4xl border border-slate-100 shadow-sm relative group overflow-hidden transition active:scale-95 animate-in fade-in zoom-in duration-300">
                             <div class="w-full aspect-square rounded-3xl bg-gray-50 mb-3 overflow-hidden border border-gray-100 relative">
                                 <img src="{{ $product->image ? asset('storage/' . $product->image) : 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300' }}" class="w-full h-full object-cover {{ !$product->is_available ? 'grayscale opacity-40' : '' }}">
                                 @if(!$product->is_available)
@@ -144,6 +196,12 @@
                                     <span class="bg-black/60 text-white px-3 py-1 rounded-lg font-black text-[10px] uppercase tracking-widest">Habis</span>
                                 </div>
                                 @endif
+                                <!-- Category Tag (Optional overlay) -->
+                                <div class="absolute top-2 left-2 flex gap-1">
+                                    @foreach(($product->tags ?? []) as $tag)
+                                    <span class="px-1.5 py-0.5 bg-white/90 backdrop-blur text-[7px] font-black uppercase rounded shadow-sm">{{ $tag }}</span>
+                                    @endforeach
+                                </div>
                             </div>
                             <h4 class="font-black text-slate-900 text-xs mb-1 line-clamp-1">{{ $product->name }}</h4>
                             <div class="flex items-center justify-between">
@@ -376,9 +434,10 @@
                     <div class="flex items-start justify-between mb-6">
                         <div>
                             <h2 class="text-3xl font-black text-slate-900 leading-tight mb-2" x-text="productDetails.name"></h2>
-                            <div class="flex gap-2">
-                                <span class="px-2 py-1 bg-slate-100 text-slate-600 text-[9px] font-black uppercase rounded">Pedas</span>
-                                <span class="px-2 py-1 bg-slate-100 text-slate-600 text-[9px] font-black uppercase rounded">Gurih</span>
+                            <div class="flex flex-wrap gap-2">
+                                <template x-for="tag in (productDetails.tags || [])" :key="tag">
+                                    <span class="px-2 py-1 bg-slate-100 text-slate-600 text-[9px] font-black uppercase rounded" x-text="tag"></span>
+                                </template>
                             </div>
                         </div>
                         <span class="text-2xl font-black text-brand tracking-tighter" x-text="'Rp ' + (productDetails.price ?? 0).toLocaleString()"></span>
@@ -479,6 +538,22 @@
         function appData() {
             return {
                 screen: 'home',
+                activeCategory: 'all',
+                activeCuisine: 'all',
+                activeTag: 'all',
+                products: {!! json_encode($products) !!},
+                cuisines: ['Indonesian Food', 'Korean Food', 'Japanese Food', 'Western Food', 'Chinese Food', 'Thai Food', 'Arabic Food'],
+                
+                get availableTags() {
+                    let tags = new Set();
+                    this.products.forEach(p => {
+                        if (p.tags && Array.isArray(p.tags)) {
+                            p.tags.forEach(t => tags.add(t));
+                        }
+                    });
+                    return Array.from(tags).sort();
+                },
+
                 tableName: 'Meja Default',
                 customerName: '',
                 cartItems: [],

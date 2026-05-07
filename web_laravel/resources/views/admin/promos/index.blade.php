@@ -44,7 +44,7 @@
             <div class="flex p-1 bg-white border border-slate-200 rounded-2xl shadow-sm">
                 <button @click="filterStatus = 'all'" :class="filterStatus === 'all' ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-slate-500 hover:text-brand bg-transparent'" class="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition">Semua</button>
                 <button @click="filterStatus = 'AKTIF'" :class="filterStatus === 'AKTIF' ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-slate-500 hover:text-brand bg-transparent'" class="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition">Aktif</button>
-                <button @click="filterStatus = 'TERJADWAL'" :class="filterStatus === 'TERJADWAL' ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-slate-500 hover:text-brand bg-transparent'" class="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition">Terjadwal</button>
+                <button @click="filterStatus = 'KADALUARSA'" :class="filterStatus === 'KADALUARSA' ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-slate-500 hover:text-brand bg-transparent'" class="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition">Kadaluarsa</button>
             </div>
 
             <div class="flex p-1 bg-white border border-slate-200 rounded-2xl shadow-sm">
@@ -78,6 +78,7 @@
                                   }"
                                   x-text="getStatus(promo)">
                             </span>
+                            <span x-show="promo.is_banner" class="px-3 py-1 text-[9px] font-black uppercase rounded-lg bg-orange-100 text-orange-600 border border-orange-200">Banner</span>
                             <button @click="filterType = promo.promo_type" class="px-3 py-1 text-[9px] font-black uppercase rounded-lg bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-900 hover:text-white transition" x-text="promo.promo_type.replace('_', ' ')"></button>
                         </div>
                         <label class="relative inline-flex items-center" :class="getStatus(promo) === 'KADALUARSA' && !promo.is_active ? 'cursor-not-allowed' : 'cursor-pointer'">
@@ -299,13 +300,11 @@
 
             getStatus(promo) {
                 const now = new Date();
-                const start = promo.start_date ? new Date(promo.start_date) : null;
                 const end = promo.end_date ? new Date(promo.end_date) : null;
                 
                 if (!promo.is_active) return 'KADALUARSA';
                 if (promo.quota !== null && promo.used >= promo.quota) return 'KADALUARSA';
                 if (end && end < now) return 'KADALUARSA';
-                if (start && start > now) return 'TERJADWAL';
                 
                 return 'AKTIF';
             },
@@ -314,7 +313,7 @@
                 return this.promos.filter(p => {
                     const matchStatus = this.filterStatus === 'all' || this.getStatus(p) === this.filterStatus;
                     const matchType = this.filterType === 'all_type' || p.promo_type === this.filterType;
-                    return matchStatus && matchType && !p.is_banner;
+                    return matchStatus && matchType;
                 });
             },
 

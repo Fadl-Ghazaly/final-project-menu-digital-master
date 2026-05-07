@@ -4,35 +4,37 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\Promo;
+use App\Models\Setting;
+use App\Models\Table;
 use Illuminate\Http\Request;
 
 class MenuController extends Controller
 {
     public function index(Request $request)
     {
+        $setting = Setting::first();
+        $restoName = $setting->site_name ?? 'MenuKu';
+        
         $categories = Category::all();
         $products = Product::all();
-        $tables = \App\Models\Table::all();
+        $tables = Table::all();
         
-        // Data for Menu Digital
-        $restoName = $request->query('resto', 'Warung Makan Pak Budi');
         $tableName = $request->query('meja', 'Meja Default');
         
-        // Dummy Promos
-        $promos = [
-            [
-                'title' => 'Diskon 20% Semua Menu',
-                'description' => 'Khusus hari ini untuk makan di tempat',
-                'image' => 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800',
-                'color' => 'linear-gradient(135deg, #FF8C00 0%, #E8781A 100%)'
-            ],
-            [
-                'title' => 'Beli 1 Gratis 1 Es Teh',
-                'description' => 'Setiap pembelian Nasi Goreng Spesial',
-                'image' => 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=800',
-                'color' => 'linear-gradient(135deg, #1D9E75 0%, #166534 100%)'
-            ],
-        ];
+        // Real Promos from Database (All Active)
+        // Use a 5-minute buffer to handle slight clock desync
+        $now = \Carbon\Carbon::now();
+        $promos = Promo::where('is_active', true)
+            ->where(function($q) use ($now) {
+                $q->whereNull('start_date')->orWhere('start_date', '<=', $now->copy()->addMinutes(5));
+            })
+            ->where(function($q) use ($now) {
+                $q->whereNull('end_date')->orWhere('end_date', '>=', $now->copy()->subMinutes(5));
+            })
+            ->orderBy('is_banner', 'desc')
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         return view('menu', compact('categories', 'products', 'tables', 'restoName', 'tableName', 'promos'));
     }

@@ -11,121 +11,96 @@ class ReportController extends Controller
 {
     public function index(Request $request)
     {
-        $period = $request->get('period', 'day'); // day, week, month
-        
-        $query = Order::query();
-        
+        $period = (string) $request->get('period', 'day');
         $now = Carbon::now();
         $startDate = $now->copy()->startOfDay();
         $endDate = $now->copy()->endOfDay();
-
-        $labels = [];
-        $data = [];
         $divisor = 1;
 
-        if ($period == 'day') {
+        if ($period === 'day') {
             $startDate = $now->copy()->startOfDay();
-            $query->whereBetween('created_at', [$startDate, $endDate]);
-            
-            $salesData = Order::select(DB::raw('HOUR(created_at) as label'), DB::raw('SUM(total_price) as total'))
-                ->whereBetween('created_at', [$startDate, $endDate])
-                ->groupBy('label')
-                ->get()
-                ->keyBy('label');
-                
-            for ($i = 0; $i <= 23; $i++) {
-                $labels[] = str_pad($i, 2, '0', STR_PAD_LEFT) . ':00';
-                $data[] = isset($salesData[$i]) ? (float)$salesData[$i]->total : 0;
-            }
             $divisor = 1;
-
-        } elseif ($period == 'week') {
+        } elseif ($period === 'week') {
             $startDate = $now->copy()->subDays(6)->startOfDay();
-            $query->whereBetween('created_at', [$startDate, $endDate]);
-            
-            $salesData = Order::select(DB::raw('DATE(created_at) as label'), DB::raw('SUM(total_price) as total'))
-                ->whereBetween('created_at', [$startDate, $endDate])
-                ->groupBy('label')
-                ->get()
-                ->keyBy('label');
-                
-            for ($i = 6; $i >= 0; $i--) {
-                $date = $now->copy()->subDays($i);
-                $labels[] = $date->translatedFormat('D'); 
-                $dateStr = $date->toDateString();
-                $data[] = isset($salesData[$dateStr]) ? (float)$salesData[$dateStr]->total : 0;
-            }
             $divisor = 7;
-
-        } elseif ($period == 'custom') {
+        } elseif ($period === 'month') {
+            $startDate = $now->copy()->startOfMonth();
+            $divisor = $now->day;
+        } elseif ($period === 'custom') {
             $startDate = Carbon::parse($request->get('start_date'))->startOfDay();
             $endDate = Carbon::parse($request->get('end_date'))->endOfDay();
-            $query->whereBetween('created_at', [$startDate, $endDate]);
+            $divisor = $startDate->diffInDays($endDate) + 1;
+        }
 
-            $salesData = Order::select(DB::raw('DATE(created_at) as label'), DB::raw('SUM(total_price) as total'))
+        $query = Order::where('status', 'completed')->whereBetween('created_at', [$startDate, $endDate]);
+        
+        $totalRevenue = (float) $query->sum('total_price');
+        $totalOrders = $query->count();
+        $averagePerDay = $divisor > 0 ? $totalRevenue / $divisor : 0;
+
+        // Chart Data
+        $labels = [];
+        $data = [];
+
+        if ($period === 'day') {
+            $salesData = Order::where('status', 'completed')
                 ->whereBetween('created_at', [$startDate, $endDate])
-                ->groupBy('label')
-                ->get()
-                ->keyBy('label');
-
+                ->select(DB::raw('HOUR(created_at) as hour_key'), DB::raw('SUM(total_price) as total'))
+                ->groupBy('hour_key')
+                ->pluck('total', 'hour_key')->toArray();
+            
+            for ($i = 0; $i <= 23; $i++) {
+                $labels[] = str_pad($i, 2, '0', STR_PAD_LEFT) . ':00';
+                // Force key to be integer or string matching database return
+                $data[] = (float) ($salesData[$i] ?? ($salesData[(string)$i] ?? 0));
+            }
+        } else {
+            // week, month, custom
+            $salesData = Order::where('status', 'completed')
+                ->whereBetween('created_at', [$startDate, $endDate])
+                ->select(DB::raw('DATE_FORMAT(created_at, "%Y-%m-%d") as date_key'), DB::raw('SUM(total_price) as total'))
+                ->groupBy('date_key')
+                ->pluck('total', 'date_key')->toArray();
+            
             $diffInDays = $startDate->diffInDays($endDate);
             for ($i = 0; $i <= $diffInDays; $i++) {
                 $date = $startDate->copy()->addDays($i);
-                $labels[] = $date->format('d/m');
-                $dateStr = $date->toDateString();
-                $data[] = isset($salesData[$dateStr]) ? (float)$salesData[$dateStr]->total : 0;
-            }
-            $divisor = $diffInDays + 1;
-
-        } else { // month
-            $startDate = $now->copy()->startOfMonth();
-            $query->whereBetween('created_at', [$startDate, $endDate]);
-            
-            $salesData = Order::select(DB::raw('DAY(created_at) as label'), DB::raw('SUM(total_price) as total'))
-                ->whereBetween('created_at', [$startDate, $endDate])
-                ->groupBy('label')
-                ->get()
-                ->keyBy('label');
                 
-            $daysInMonth = $now->daysInMonth;
-            for ($i = 1; $i <= $daysInMonth; $i++) {
-                $labels[] = $i;
-                $data[] = isset($salesData[$i]) ? (float)$salesData[$i]->total : 0;
+                if ($period === 'week') {
+                    $labels[] = $date->translatedFormat('D');
+                } else {
+                    $labels[] = $date->format('d/m');
+                }
+                
+                $dateStr = $date->format('Y-m-d');
+                $data[] = (float) ($salesData[$dateStr] ?? 0);
             }
-            $divisor = $now->day; 
         }
-
-        $totalRevenue = $query->sum('total_price') ?? 0;
-        $totalOrders = $query->count();
-        $averagePerDay = $divisor > 0 ? $totalRevenue / $divisor : 0;
 
         $topMenus = DB::table('order_items')
             ->join('orders', 'order_items.order_id', '=', 'orders.id')
             ->join('products', 'order_items.product_id', '=', 'products.id')
+            ->where('orders.status', 'completed')
             ->whereBetween('orders.created_at', [$startDate, $endDate])
             ->select('products.name', DB::raw('SUM(order_items.quantity) as total_qty'), DB::raw('SUM(order_items.price * order_items.quantity) as total_revenue'))
             ->groupBy('products.id', 'products.name')
             ->orderByDesc('total_qty')
-            ->take(5)
-            ->get()
-            ->map(function($item) {
-                return [
-                    'name' => $item->name,
-                    'qty' => $item->total_qty,
-                    'revenue' => $item->total_revenue
-                ];
-            });
-
-        $topMenuName = count($topMenus) > 0 ? $topMenus[0]['name'] : '-';
+            ->take(5)->get();
 
         $reportData = [
             'totalRevenue' => $totalRevenue,
             'totalOrders' => $totalOrders,
             'averagePerDay' => $averagePerDay,
-            'topMenuName' => $topMenuName,
+            'topMenuName' => $topMenus->first()->name ?? '-',
             'chartLabels' => $labels,
             'chartData' => $data,
-            'topMenus' => $topMenus
+            'topMenus' => $topMenus->map(function($m) {
+                return [
+                    'name' => $m->name,
+                    'qty' => (int) $m->total_qty,
+                    'revenue' => (float) $m->total_revenue
+                ];
+            })
         ];
 
         if ($request->expectsJson()) {
@@ -150,7 +125,7 @@ class ReportController extends Controller
         }
         else $startDate = $now->copy()->startOfMonth();
 
-        $orders = Order::whereBetween('created_at', [$startDate, $endDate])->latest()->get();
+        $orders = Order::where('status', 'completed')->whereBetween('created_at', [$startDate, $endDate])->latest()->get();
 
         $headers = [
             "Content-type"        => "text/csv",
@@ -196,7 +171,7 @@ class ReportController extends Controller
         }
         else $startDate = $now->copy()->startOfMonth();
 
-        $orders = Order::whereBetween('created_at', [$startDate, $endDate])->latest()->get();
+        $orders = Order::where('status', 'completed')->whereBetween('created_at', [$startDate, $endDate])->latest()->get();
         $totalRevenue = $orders->sum('total_price');
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('admin.reports.pdf', compact('orders', 'totalRevenue', 'period', 'startDate', 'endDate'));

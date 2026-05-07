@@ -9,7 +9,6 @@
     <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10">
         <div class="flex flex-wrap items-center gap-4">
             <div class="flex p-1 bg-white border border-slate-200 rounded-2xl shadow-sm relative">
-                <!-- Loading indicator overlay -->
                 <div x-show="isLoading" class="absolute inset-0 bg-white/50 rounded-2xl flex items-center justify-center backdrop-blur-[1px] z-10" style="display: none;">
                     <i data-lucide="loader-2" class="w-5 h-5 text-brand animate-spin"></i>
                 </div>
@@ -20,7 +19,6 @@
                 <button @click="period = 'custom'" :class="period === 'custom' ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-slate-500 hover:text-brand'" class="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition">Kustom</button>
             </div>
 
-            <!-- Custom Date Inputs -->
             <div x-show="period === 'custom'" x-transition class="flex items-center gap-2 p-1 bg-white border border-slate-200 rounded-2xl shadow-sm">
                 <input type="date" x-model="startDate" class="bg-transparent border-none focus:ring-0 text-xs font-bold text-slate-600 px-3 py-1">
                 <span class="text-slate-300 font-black">-</span>
@@ -74,7 +72,6 @@
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
-        <!-- Sales Chart (Left - 2/3) -->
         <div class="lg:col-span-8 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative">
             <div x-show="isLoading" class="absolute inset-0 bg-white/60 rounded-[2.5rem] flex items-center justify-center backdrop-blur-sm z-10" style="display: none;">
                 <i data-lucide="loader-2" class="w-8 h-8 text-brand animate-spin"></i>
@@ -85,12 +82,14 @@
                 <span class="px-3 py-1 bg-brand/10 text-brand text-[10px] font-black uppercase rounded-lg border border-brand/10" x-text="period === 'day' ? 'Harian (Jam)' : (period === 'week' ? 'Mingguan (Hari)' : 'Bulanan (Tgl)')"></span>
             </div>
             
-            <div class="h-[400px] w-full">
-                <canvas id="reportsChart"></canvas>
+            <div class="h-[400px] w-full flex items-center justify-center relative">
+                <canvas x-ref="canvas"></canvas>
+                <div x-show="data.chartData && data.chartData.every(v => v === 0)" class="absolute inset-0 flex items-center justify-center pointer-events-none" style="display: none;">
+                    <p class="text-xs font-bold text-slate-300 uppercase tracking-widest">Tidak Ada Data Penjualan</p>
+                </div>
             </div>
         </div>
 
-        <!-- Top Products (Right - 1/3) -->
         <div class="lg:col-span-4 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative">
             <div x-show="isLoading" class="absolute inset-0 bg-white/60 rounded-[2.5rem] flex items-center justify-center backdrop-blur-sm z-10" style="display: none;"></div>
             
@@ -121,7 +120,6 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     window.initialReportData = {!! json_encode($reportData) !!};
     function reportManager() {
@@ -130,125 +128,101 @@
             data: window.initialReportData,
             startDate: new Date().toISOString().split('T')[0],
             endDate: new Date().toISOString().split('T')[0],
-
             chartInstance: null,
             isLoading: false,
 
             init() {
                 this.$nextTick(() => {
                     lucide.createIcons();
-                    this.initChart();
+                    setTimeout(() => this.initChart(), 500);
                 });
             },
 
             formatRupiah(value) {
-                if(!value) return 'Rp 0';
-                return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
+                const num = parseFloat(value) || 0;
+                return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(num);
             },
             
             formatShortRupiah(value) {
-                if(!value) return 'Rp 0';
-                if(value >= 1000000) return 'Rp ' + (value/1000000).toFixed(1).replace('.0', '') + 'M';
-                if(value >= 1000) return 'Rp ' + (value/1000).toFixed(0) + 'k';
-                return 'Rp ' + value;
+                const num = parseFloat(value) || 0;
+                if(num >= 1000000) return 'Rp ' + (num/1000000).toFixed(1).replace('.0', '') + 'M';
+                if(num >= 1000) return 'Rp ' + (num/1000).toFixed(0) + 'k';
+                return 'Rp ' + num;
             },
 
             async fetchData(selectedPeriod) {
                 if (this.isLoading) return;
-                
                 this.period = selectedPeriod;
                 this.isLoading = true;
-
                 try {
                     let url = `/admin/reports?period=${selectedPeriod}`;
-                    if (selectedPeriod === 'custom') {
-                        url += `&start_date=${this.startDate}&end_date=${this.endDate}`;
-                    }
-                    
-                    const response = await fetch(url, {
-                        headers: {
-                            'Accept': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        }
-                    });
-                    
+                    if (selectedPeriod === 'custom') url += `&start_date=${this.startDate}&end_date=${this.endDate}`;
+                    const response = await fetch(url, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
                     const newData = await response.json();
-                    this.data = newData;
-                    this.updateChart();
+                    this.data = JSON.parse(JSON.stringify(newData));
+                    this.$nextTick(() => {
+                        this.updateChart();
+                        lucide.createIcons();
+                    });
                 } catch (error) {
-                    console.error("Gagal memuat laporan", error);
+                    console.error("Error:", error);
                 } finally {
                     this.isLoading = false;
-                    this.$nextTick(() => lucide.createIcons());
                 }
             },
 
             initChart() {
-                const ctx = document.getElementById('reportsChart').getContext('2d');
-                
+                const canvas = this.$refs.canvas;
+                if (!canvas) return;
+                if (typeof Chart === 'undefined') {
+                    setTimeout(() => this.initChart(), 500);
+                    return;
+                }
+                const ctx = canvas.getContext('2d');
+                if (this.chartInstance) this.chartInstance.destroy();
+
                 this.chartInstance = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: this.data.chartLabels,
+                        labels: JSON.parse(JSON.stringify(this.data.chartLabels || [])),
                         datasets: [{
                             label: 'Pendapatan',
-                            data: this.data.chartData,
+                            data: JSON.parse(JSON.stringify(this.data.chartData || [])),
                             borderColor: '#E8781A',
                             backgroundColor: 'rgba(232, 120, 26, 0.05)',
-                            borderWidth: 4,
+                            borderWidth: 3,
                             fill: true,
                             tension: 0.4,
-                            pointRadius: 0,
+                            pointRadius: 3,
                             pointHoverRadius: 6,
-                            pointHoverBackgroundColor: '#fff',
-                            pointHoverBorderColor: '#E8781A',
-                            pointHoverBorderWidth: 3,
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                mode: 'index',
-                                intersect: false,
-                                callbacks: {
-                                    label: function(context) {
-                                        return 'Rp ' + context.parsed.y.toLocaleString('id-ID');
-                                    }
-                                }
-                            }
-                        },
+                        plugins: { legend: { display: false } },
                         scales: {
-                            y: {
-                                beginAtZero: true,
-                                grid: { color: 'rgba(0,0,0,0.03)' },
-                                ticks: {
-                                    callback: function(value) {
-                                        if(value >= 1000000) return 'Rp ' + (value/1000000).toFixed(1) + 'M';
-                                        if(value >= 1000) return 'Rp ' + (value/1000).toFixed(0) + 'k';
-                                        return 'Rp ' + value;
-                                    },
-                                    font: { family: 'Outfit', weight: '700', size: 10 }
-                                }
-                            },
-                            x: {
-                                grid: { display: false },
-                                ticks: { font: { family: 'Outfit', weight: '700', size: 10 } }
-                            }
+                            y: { beginAtZero: true, ticks: { callback: (v) => this.formatShortRupiah(v) } },
+                            x: { grid: { display: false } }
                         }
                     }
                 });
             },
             
             updateChart() {
-                if (!this.chartInstance) return;
-                this.chartInstance.data.labels = this.data.chartLabels;
-                this.chartInstance.data.datasets[0].data = this.data.chartData;
+                if (!this.chartInstance) {
+                    this.initChart();
+                    return;
+                }
+                this.chartInstance.data.labels = JSON.parse(JSON.stringify(this.data.chartLabels || []));
+                this.chartInstance.data.datasets[0].data = JSON.parse(JSON.stringify(this.data.chartData || []));
                 this.chartInstance.update();
             }
         }
     }
 </script>
+
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+@endpush
 @endsection
