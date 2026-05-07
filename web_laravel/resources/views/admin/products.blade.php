@@ -107,6 +107,7 @@
                         <div>
                             <div class="flex items-center gap-2 mb-3">
                                 <span class="px-2 py-0.5 bg-red-50 text-red-500 text-[8px] font-black uppercase rounded-md border border-red-100" x-show="product.is_popular">Populer</span>
+                                <span class="px-2 py-0.5 bg-rose-500 text-white text-[8px] font-black uppercase rounded-md shadow-sm" x-show="product.discount_percentage > 0" x-text="'-' + product.discount_percentage + '%'"></span>
                                 <span class="px-2 py-0.5 bg-brand/5 text-brand text-[8px] font-black uppercase rounded-md border border-brand/10" x-show="product.cuisine" x-text="product.cuisine"></span>
                             </div>
                             <h3 class="text-base font-black text-slate-900 mb-1 leading-tight" :class="!product.is_available ? 'text-slate-400' : ''" x-text="product.name"></h3>
@@ -118,7 +119,12 @@
                                 </template>
                             </div>
 
-                            <p class="text-lg font-black text-brand mb-4 tracking-tighter" :class="!product.is_available ? 'opacity-50' : ''" x-text="formatPrice(product.price)"></p>
+                            <div class="flex flex-col mb-4">
+                                <template x-if="product.discount_percentage > 0">
+                                    <span class="text-[10px] font-bold text-slate-400 line-through leading-none mb-1" x-text="formatPrice(product.price)"></span>
+                                </template>
+                                <p class="text-lg font-black text-brand tracking-tighter leading-none" :class="!product.is_available ? 'opacity-50' : ''" x-text="formatPrice(product.discount_percentage > 0 ? (product.price * (1 - product.discount_percentage/100)) : product.price)"></p>
+                            </div>
                         </div>
                         
                         <div class="flex items-center justify-between pt-4 border-t border-slate-100">
@@ -257,6 +263,14 @@
                             <div class="relative">
                                 <input type="number" name="price" required placeholder="25000" class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-brand outline-none font-medium text-sm pl-12 transition">
                                 <span class="absolute left-6 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">Rp</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-2 px-1">Diskon (%)</label>
+                            <div class="relative">
+                                <input type="number" name="discount_percentage" min="0" max="100" placeholder="0" class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-brand outline-none font-medium text-sm pr-12 transition">
+                                <span class="absolute right-6 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">%</span>
                             </div>
                         </div>
 
@@ -429,6 +443,14 @@
                             <div class="relative">
                                 <input type="number" name="price" :value="selectedProduct?.price" required class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-brand outline-none font-medium text-sm pl-12 transition">
                                 <span class="absolute left-6 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">Rp</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-2 px-1">Diskon (%)</label>
+                            <div class="relative">
+                                <input type="number" name="discount_percentage" :value="selectedProduct?.discount_percentage" min="0" max="100" class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-brand outline-none font-medium text-sm pr-12 transition">
+                                <span class="absolute right-6 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">%</span>
                             </div>
                         </div>
 
